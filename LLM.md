@@ -35,11 +35,11 @@ memory.add([
 ], user_id="user123")
 
 # Search memories
-results = memory.search("food preferences", user_id="user123")
+results = memory.search("food preferences", filters={"user_id": "user123"})
 print(results)
 
 # Get all memories
-all_memories = memory.get_all(user_id="user123")
+all_memories = memory.get_all(filters={"user_id": "user123"})
 ```
 
 ### Python - Hosted Platform
@@ -55,7 +55,7 @@ client.add([
 ], user_id="john")
 
 # Search memories
-results = client.search("What do you know about me?", user_id="john")
+results = client.search("What do you know about me?", filters={"user_id": "john"})
 ```
 
 ### TypeScript - Client SDK
@@ -122,7 +122,7 @@ memory = Memory(config)
   - `prompt`: Custom prompt for memory creation
 - **Returns**: Dict with "results" key containing memory operations
 
-**search(query, *, user_id=None, agent_id=None, run_id=None, limit=100, filters=None, threshold=None)**
+**search(query, *, top_k=20, filters=None, threshold=0.1, rerank=False, explain=False, reference_date=None, show_expired=False)**
 - **Purpose**: Search memories semantically
 - **Parameters**:
   - `query`: Search query string
@@ -136,7 +136,7 @@ memory = Memory(config)
 - **Purpose**: Retrieve specific memory by ID
 - **Returns**: Memory dict with id, memory, hash, timestamps, metadata
 
-**get_all(*, user_id=None, agent_id=None, run_id=None, filters=None, limit=100)**
+**get_all(*, filters=None, top_k=20, show_expired=False)**
 - **Purpose**: List all memories with optional filtering
 - **Returns**: Dict with "results" containing list of memories
 
@@ -702,7 +702,7 @@ class PersonalAssistant:
     
     def chat(self, user_input: str, user_id: str) -> str:
         # Retrieve relevant memories
-        memories = self.memory.search(user_input, user_id=user_id, limit=5)
+        memories = self.memory.search(user_input, filters={"user_id": user_id}, top_k=5)
         
         # Build context from memories
         context = "\n".join([f"- {m['memory']}" for m in memories['results']])
@@ -852,7 +852,7 @@ class MultiAgentSystem:
         )
         
         # Review phase
-        all_context = self.shared_memory.get_all(run_id=session_id)
+        all_context = self.shared_memory.get_all(filters={"run_id": session_id})
         final_output = self.agents["reviewer"].review(draft, all_context)
         
         return final_output
@@ -882,7 +882,7 @@ class VoiceAssistant:
             print(f"User said: {user_input}")
             
             # Get relevant memories
-            memories = self.memory.search(user_input, user_id=user_id)
+            memories = self.memory.search(user_input, filters={"user_id": user_id})
             context = "\n".join([m['memory'] for m in memories['results'][:3]])
             
             # Generate response
@@ -948,11 +948,10 @@ results = memory.search(
 )
 
 # Combine multiple searches for comprehensive results
-technical_issues = memory.search("technical problems", user_id=user_id)
+technical_issues = memory.search("technical problems", filters={"user_id": user_id})
 recent_conversations = memory.get_all(
-    user_id=user_id,
-    filters={"metadata.timestamp": {"$gte": last_week}},
-    limit=10
+    filters={"user_id": user_id, "metadata.timestamp": {"$gte": last_week}},
+    top_k=10
 )
 ```
 
@@ -1017,7 +1016,7 @@ from functools import lru_cache
 
 @lru_cache(maxsize=100)
 def get_user_preferences(user_id: str):
-    return memory.search("preferences settings", user_id=user_id, limit=5)
+    return memory.search("preferences settings", filters={"user_id": user_id}, top_k=5)
 ```
 
 
@@ -1125,7 +1124,7 @@ if st.button("Send"):
 
 # Display all memories
 if st.button("Show All Memories"):
-    all_memories = st.session_state.memory.get_all(user_id=user_id)
+    all_memories = st.session_state.memory.get_all(filters={"user_id": user_id})
     for memory in all_memories['results']:
         st.write(f"- {memory['memory']}")
 ```
@@ -1183,7 +1182,7 @@ async def search_memories(request: SearchRequest):
 @app.get("/memories/{user_id}")
 async def get_user_memories(user_id: str, limit: int = 50):
     try:
-        memories = memory_client.get_all(user_id=user_id, limit=limit)
+        memories = memory_client.get_all(filters={"user_id": user_id}, limit=limit)
         return {"memories": memories}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1219,7 +1218,7 @@ async def delete_memory(memory_id: str):
    )
    
    # Check if memories exist for user
-   all_memories = memory.get_all(user_id=user_id)
+   all_memories = memory.get_all(filters={"user_id": user_id})
    if not all_memories['results']:
        print("No memories found for user")
    ```
@@ -1295,7 +1294,7 @@ async def delete_memory(memory_id: str):
    ```python
    # Regular cleanup to maintain performance
    def cleanup_memories(memory_client, user_id, max_memories=1000):
-       all_memories = memory_client.get_all(user_id=user_id)
+       all_memories = memory_client.get_all(filters={"user_id": user_id})
        if len(all_memories) > max_memories:
            # Keep most recent memories
            sorted_memories = sorted(
